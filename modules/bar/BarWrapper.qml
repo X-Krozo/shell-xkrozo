@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import "components"
 import Quickshell
 import Caelestia.Config
 import qs.components
@@ -99,5 +100,24 @@ Item {
             fullscreen: root.fullscreen
             horizontal: root.horizontal
         }
+    }
+
+    ActiveWindow {
+        id: fixedActiveWindow
+
+        objectName: "fixedTaskbarActiveWindow"
+        bar: content.item as Bar
+        horizontal: root.horizontal
+        maxSizeOverride: root.horizontal ? width : height
+        forceMouseArea: true
+
+        anchors.left: root.horizontal ? parent.left : undefined
+        anchors.top: root.horizontal ? undefined : parent.top
+        anchors.leftMargin: root.horizontal ? root.padding + 36 : 0
+        anchors.topMargin: root.horizontal ? 0 : root.padding
+
+        width: root.horizontal ? Math.min(320, Math.max(0, parent.width - root.padding * 2)) : root.contentThickness
+        height: root.horizontal ? root.contentThickness : Math.min(320, Math.max(0, parent.height - root.padding * 2))
+        visible: root.shouldBeVisible && content.status === Loader.Ready
     }
 }

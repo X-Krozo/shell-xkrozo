@@ -11,6 +11,7 @@ StyledRect {
     id: root
 
     required property bool horizontal
+    required property var bar
     readonly property alias layout: layout
     readonly property alias items: items
     readonly property alias expandIcon: expandIcon
@@ -91,7 +92,9 @@ StyledRect {
                 values: SystemTray.items.values.filter(i => !GlobalConfig.bar.tray.hiddenIcons.includes(i.id))
             }
 
-            TrayItem {}
+            TrayItem {
+                bar: root.bar
+            }
         }
 
         Behavior on opacity {

@@ -23,7 +23,11 @@ Scope {
         return true;
     }
 
-    function handleIdleAction(action: var): void {
+    function isSuspendAction(action: var): bool {
+        return action === "suspend" || (Array.isArray(action) && action.length === 1 && action[0] === "suspend");
+    }
+
+    function handleIdleAction(action: var, isIdle: bool): void {
         if (!action)
             return;
 
@@ -31,10 +35,17 @@ Scope {
             lock.lock.locked = true;
         else if (action === "unlock")
             lock.lock.locked = false;
+        else if (isIdle && isSuspendAction(action))
+            lockAndSuspend();
         else if (typeof action === "string")
             Hypr.dispatch(Hypr.usingLua && ["dpms off", "dpms on"].includes(action) ? `hl.dsp.dpms({ action = "${action === "dpms off" ? "disable" : "enable"}" })` : action);
         else if (!SessionManager.exec(action))
             Quickshell.execDetached(action);
+    }
+
+    function lockAndSuspend(): void {
+        lock.suspendPending = true;
+        lock.lockSession();
     }
 
     Connections {
@@ -71,7 +82,12 @@ Scope {
             }
             timeout: modelData.timeout
             respectInhibitors: modelData.respectInhibitors ?? true
-            onIsIdleChanged: root.handleIdleAction(isIdle ? modelData.idleAction : modelData.returnAction)
+            onIsIdleChanged: {
+                if (isIdle)
+                    root.handleIdleAction(modelData.idleAction, true);
+                else if (modelData.returnAction)
+                    root.handleIdleAction(modelData.returnAction, false);
+            }
         }
     }
 }

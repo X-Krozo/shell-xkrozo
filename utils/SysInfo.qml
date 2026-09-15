@@ -17,6 +17,12 @@ Singleton {
     property bool isDefaultLogo: true
 
     property string uptime
+    readonly property string uptimeShort: {
+        const up = uptimeSeconds;
+        const pad = value => value.toString().padStart(2, "0");
+        return `${pad(Math.floor(up / 86400))}:${pad(Math.floor((up % 86400) / 3600))}:${pad(Math.floor((up % 3600) / 60))}`;
+    }
+    property int uptimeSeconds
     readonly property string user: Quickshell.env("USER")
     readonly property string wm: Quickshell.env("XDG_CURRENT_DESKTOP") || Quickshell.env("XDG_SESSION_DESKTOP")
     readonly property string shell: Quickshell.env("SHELL").split("/").pop()
@@ -120,6 +126,7 @@ Singleton {
         path: "/proc/uptime"
         onLoaded: {
             const up = parseInt(text().split(" ")[0] ?? 0);
+            root.uptimeSeconds = up;
 
             const days = Math.floor(up / 86400);
             const hours = Math.floor((up % 86400) / 3600);

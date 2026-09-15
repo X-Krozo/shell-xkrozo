@@ -105,6 +105,46 @@ Singleton {
         return stream.properties["application.name"] || stream.description || stream.name || qsTr("Unknown Application");
     }
 
+    function getAppStream(appName: string): PwNode {
+        if (!appName)
+            return null;
+
+        const wanted = appName.trim().toLowerCase();
+        if (!wanted)
+            return null;
+
+        // Try matching each stream's name both ways (identity like "Mozilla firefox" vs
+        // stream application.name/node.name "firefox" or "Tauon").
+        const exact = root.streams.find(s => (getStreamName(s) || "").toLowerCase() === wanted);
+        if (exact)
+            return exact;
+
+        const direct = root.streams.find(s => {
+            const name = (getStreamName(s) || "").toLowerCase();
+            if (!name)
+                return false;
+            // Either the stream name is contained in the app name, or the app name in it.
+            return name.startsWith(wanted) || wanted.startsWith(name) || name.includes(wanted) || wanted.includes(name);
+        });
+        if (direct)
+            return direct;
+
+        // Last resort: token overlap (e.g. identity "Mozilla Firefox" -> stream "firefox").
+        const wantedTokens = wanted.split(/[^a-z0-9]+/).filter(t => t.length > 1);
+        if (wantedTokens.length > 0) {
+            const scored = root.streams.map(s => {
+                const name = (getStreamName(s) || "").toLowerCase();
+                const tokens = name.split(/[^a-z0-9]+/).filter(t => t.length > 1);
+                const overlap = tokens.filter(t => wantedTokens.includes(t)).length;
+                return { stream: s, score: overlap };
+            }).filter(e => e.score > 0).sort((a, b) => b.score - a.score);
+            if (scored.length > 0)
+                return scored[0].stream;
+        }
+
+        return null;
+    }
+
     function refreshNodes(): void {
         const newSinks = [];
         const newSources = [];

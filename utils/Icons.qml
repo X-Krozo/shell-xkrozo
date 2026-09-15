@@ -218,6 +218,8 @@ Singleton {
 
         if (name === "special")
             return "star";
+        if (name === "magic")
+            return "star";
         if (name === "communication")
             return "forum";
         if (name === "music")

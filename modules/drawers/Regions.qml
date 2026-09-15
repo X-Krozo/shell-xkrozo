@@ -57,6 +57,10 @@ Region {
     }
 
     R {
+        panel: root.panels.volumeDockWrapper
+    }
+
+    R {
         panel: root.panels.notifications
         y: 0
         height: panel.height + root.geometry.insetTop(root.borderThickness)

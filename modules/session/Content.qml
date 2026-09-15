@@ -14,6 +14,7 @@ Column {
     id: root
 
     required property ScreenState screenState
+    readonly property string hoveredTooltip: logout.hovered ? logout.tooltipText : lock.hovered ? lock.tooltipText : sleep.hovered ? sleep.tooltipText : shutdown.hovered ? shutdown.tooltipText : hibernate.hovered ? hibernate.tooltipText : reboot.hovered ? reboot.tooltipText : dancingLadyHover.containsMouse ? SysInfo.uptimeShort : ""
 
     padding: Tokens.padding.large
     rightPadding: CUtils.clamp(padding - Config.border.thickness, 0, padding)
@@ -24,8 +25,9 @@ Column {
 
         icon: Config.session.icons.logout
         command: Config.session.commands.logout
+        tooltipText: qsTr("Log out")
 
-        KeyNavigation.down: shutdown
+        KeyNavigation.down: lock
 
         Component.onCompleted: forceActiveFocus()
 
@@ -40,16 +42,30 @@ Column {
     }
 
     SessionButton {
-        id: shutdown
+        id: lock
 
-        icon: Config.session.icons.shutdown
-        command: Config.session.commands.shutdown
+        icon: "lock"
+        command: ["qs", "-c", "caelestia", "ipc", "call", "lock", "lock"]
+        tooltipText: qsTr("Lock")
 
         KeyNavigation.up: logout
-        KeyNavigation.down: hibernate
+        KeyNavigation.down: sleep
+    }
+
+    SessionButton {
+        id: sleep
+
+        icon: "bedtime"
+        command: ["qs", "-c", "caelestia", "ipc", "call", "lock", "lockAndSuspend"]
+        tooltipText: qsTr("Sleep")
+
+        KeyNavigation.up: lock
+        KeyNavigation.down: shutdown
     }
 
     AnimatedImage {
+        id: dancingLady
+
         width: Tokens.sizes.session.button
         height: Tokens.sizes.session.button
         sourceSize.width: width * ((QsWindow.window as QsWindow)?.devicePixelRatio ?? 1)
@@ -59,15 +75,30 @@ Column {
         speed: Config.general.sessionGifSpeed
         source: Paths.absolutePath(Config.paths.sessionGif)
         fillMode: AnimatedImage.PreserveAspectFit
+
+        MouseArea {
+            id: dancingLadyHover
+
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            hoverEnabled: true
+            onClicked: event => {
+                if (event.button === Qt.RightButton)
+                    root.screenState.appVolumes = !root.screenState.appVolumes;
+                else
+                    root.screenState.osd = !root.screenState.osd;
+            }
+        }
     }
 
     SessionButton {
-        id: hibernate
+        id: shutdown
 
-        icon: Config.session.icons.hibernate
-        command: Config.session.commands.hibernate
+        icon: Config.session.icons.shutdown
+        command: Config.session.commands.shutdown
+        tooltipText: qsTr("Shut down")
 
-        KeyNavigation.up: shutdown
+        KeyNavigation.up: sleep
         KeyNavigation.down: reboot
     }
 
@@ -76,14 +107,27 @@ Column {
 
         icon: Config.session.icons.reboot
         command: Config.session.commands.reboot
+        tooltipText: qsTr("Reboot")
 
-        KeyNavigation.up: hibernate
+        KeyNavigation.up: shutdown
+        KeyNavigation.down: hibernate
+    }
+
+    SessionButton {
+        id: hibernate
+
+        icon: Config.session.icons.hibernate
+        command: Config.session.commands.hibernate
+        tooltipText: qsTr("Hibernate")
+
+        KeyNavigation.up: reboot
     }
 
     component SessionButton: IconButton {
         id: button
 
         required property list<string> command
+        property string tooltipText
 
         function exec(): void {
             if (!SessionManager.exec(command))

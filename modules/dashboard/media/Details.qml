@@ -10,6 +10,12 @@ import qs.services
 ColumnLayout {
     id: root
 
+    required property ScreenState screenState
+    property bool stretchPlay: true
+    property real controlScale: 1
+    property real sliderMaxWidth: 100000
+    property bool centerTransport: false
+
     readonly property bool hasUnknownLength: (Players.active?.length ?? 0) > 2147483647
 
     function lengthStr(length: int): string {
@@ -63,7 +69,8 @@ ColumnLayout {
 
     RowLayout {
         Layout.topMargin: Tokens.spacing.extraLargeIncreased
-        Layout.fillWidth: true
+        Layout.fillWidth: !root.centerTransport
+        Layout.alignment: root.centerTransport ? Qt.AlignHCenter : Qt.AlignLeft
         spacing: Tokens.spacing.small
 
         TextMetrics {
@@ -86,7 +93,9 @@ ColumnLayout {
         StyledSlider {
             id: positionSlider
 
-            Layout.fillWidth: true
+            Layout.fillWidth: !root.centerTransport
+            Layout.preferredWidth: root.centerTransport ? root.sliderMaxWidth : undefined
+            Layout.maximumWidth: root.sliderMaxWidth
             value: Players.active ? Players.active.position / (Players.active.length || 1) : 0
             enabled: (Players.active?.canSeek ?? false) && !root.hasUnknownLength
             wavy: true
@@ -119,7 +128,8 @@ ColumnLayout {
 
     ButtonRow {
         Layout.topMargin: Tokens.spacing.largeIncreased
-        Layout.fillWidth: true
+        Layout.fillWidth: !root.centerTransport
+        Layout.alignment: root.centerTransport ? Qt.AlignHCenter : Qt.AlignLeft
         spacing: Tokens.spacing.extraSmall
 
         IconButton {
@@ -131,7 +141,7 @@ ColumnLayout {
             font: Tokens.font.icon.builders.medium.weight(Font.Medium).build()
             disabled: !Players.active?.shuffleSupported
             onClicked: Players.active.shuffle = !Players.active?.shuffle
-            implicitWidth: Math.round(implicitHeight * 0.9)
+            implicitWidth: Math.round(implicitHeight * 0.9 * root.controlScale)
         }
 
         IconButton {
@@ -144,6 +154,7 @@ ColumnLayout {
             font: Tokens.font.icon.large
             disabled: !Players.active?.canGoPrevious
             onClicked: Players.active?.previous()
+            implicitWidth: Math.round(implicitHeight * root.controlScale)
         }
 
         IconButton {
@@ -152,11 +163,12 @@ ColumnLayout {
             icon: Players.active?.isPlaying ? "pause" : "play_arrow"
             isRound: true
             shapeMorph: true
-            fillWidth: true
+            fillWidth: root.stretchPlay
             checked: Players.active?.isPlaying ?? false
             font: Tokens.font.icon.large
             disabled: !Players.active?.canTogglePlaying
             onClicked: Players.active?.togglePlaying()
+            implicitWidth: Math.round(implicitHeight * root.controlScale * 1.5)
         }
 
         IconButton {
@@ -169,6 +181,7 @@ ColumnLayout {
             font: Tokens.font.icon.large
             disabled: !Players.active?.canGoNext
             onClicked: Players.active?.next()
+            implicitWidth: Math.round(implicitHeight * root.controlScale)
         }
 
         IconButton {
@@ -188,7 +201,20 @@ ColumnLayout {
                 else
                     Players.active.loopState = MprisLoopState.None;
             }
-            implicitWidth: Math.round(implicitHeight * 0.9)
+            implicitWidth: Math.round(implicitHeight * 0.9 * root.controlScale)
+        }
+
+        IconButton {
+            icon: root.screenState.mediaFullscreen ? "fullscreen_exit" : "fullscreen"
+            type: IconButton.Tonal
+            isRound: true
+            shapeMorph: true
+            font: Tokens.font.icon.builders.medium.weight(Font.Medium).build()
+            onClicked: {
+                root.screenState.mediaFullscreen = !root.screenState.mediaFullscreen;
+                root.screenState.dashboard = false;
+            }
+            implicitWidth: Math.round(implicitHeight * 0.9 * root.controlScale)
         }
     }
 }

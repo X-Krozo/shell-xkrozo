@@ -137,7 +137,7 @@ Item {
                 required property SystemTrayItem modelData
                 required property int index
 
-                name: `traymenu${index}`
+                name: `traymenu${modelData.id}`
                 sourceComponent: trayMenuComp
 
                 Connections {

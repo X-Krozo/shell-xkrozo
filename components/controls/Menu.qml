@@ -30,10 +30,17 @@ MouseArea {
     property list<MenuItem> items
     property MenuItem active: items[0] ?? null
     property bool expanded
+    property Item parentOverride: null
+    property bool elevated: false
 
     signal itemSelected(item: MenuItem)
 
+    z: root.elevated ? 1000 : 0
+
     parent: {
+        if (root.parentOverride)
+            return root.parentOverride;
+
         const win = QsWindow.window;
         const contentWin = win as ContentWindow; // If inside the drawer content window, put it inside the interaction wrapper so hover works
         return contentWin ? contentWin.interactionWrapper : (win as QsWindow).contentItem;

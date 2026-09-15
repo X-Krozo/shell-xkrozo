@@ -11,6 +11,8 @@ PersistentProperties {
     property bool dashboard
     property bool utilities
     property bool sidebar
+    property bool appVolumes
+    property bool mediaFullscreen
 
     // Dashboard state
     property int dashboardTab

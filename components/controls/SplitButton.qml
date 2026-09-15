@@ -20,6 +20,8 @@ Row {
     property string fallbackIcon
     property string fallbackText
     property real minLeftWidth
+    property Item menuParentOverride: null
+    property bool menuElevated: false
 
     property alias menuItems: menu.items
     property alias active: menu.active
@@ -147,5 +149,7 @@ Row {
         attachSideY: root.menuOnTop ? Menu.Top : Menu.Bottom
         thisSideY: root.menuOnTop ? Menu.Bottom : Menu.Top
         marginY: Tokens.spacing.small * (root.menuOnTop ? -1 : 1)
+        parentOverride: root.menuParentOverride
+        elevated: root.menuElevated
     }
 }

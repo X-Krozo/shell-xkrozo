@@ -9,7 +9,6 @@ import qs.modules.nexus
 Scope {
     id: root
 
-    property bool launcherInterrupted
     readonly property bool hasFullscreen: Hypr.focusedWorkspace?.toplevels.values.some(t => t.lastIpcObject.fullscreen > 1) ?? false
 
     // qmllint disable unresolved-type
@@ -62,15 +61,28 @@ Scope {
     // qmllint disable unresolved-type
     CustomShortcut {
         // qmllint enable unresolved-type
+        name: "overviewToggle"
+        description: "Toggle overview"
+        onPressed: {
+            if (root.hasFullscreen)
+                return;
+            const screenState = ShellState.forActive();
+            screenState.launcher = !screenState.launcher;
+        }
+    }
+
+    // qmllint disable unresolved-type
+    CustomShortcut {
+        // qmllint enable unresolved-type
         name: "launcher"
         description: "Toggle launcher"
-        onPressed: root.launcherInterrupted = false
+        onPressed: ShellState.launcherInterrupts = 0
         onReleased: {
-            if (!root.launcherInterrupted && !root.hasFullscreen) {
+            if (ShellState.launcherInterrupts <= 0 && !root.hasFullscreen) {
                 const screenState = ShellState.forActive();
                 screenState.launcher = !screenState.launcher;
             }
-            root.launcherInterrupted = false;
+            ShellState.launcherInterrupts = 0;
         }
     }
 
@@ -79,7 +91,7 @@ Scope {
         // qmllint enable unresolved-type
         name: "launcherInterrupt"
         description: "Interrupt launcher keybind"
-        onPressed: root.launcherInterrupted = true
+        onPressed: ShellState.launcherInterrupts++
     }
 
     // qmllint disable unresolved-type
@@ -105,6 +117,17 @@ Scope {
                 return;
             const screenState = ShellState.forActive();
             screenState.utilities = !screenState.utilities;
+        }
+    }
+
+    // qmllint disable unresolved-type
+    CustomShortcut {
+        // qmllint enable unresolved-type
+        name: "mediaFullscreen"
+        description: "Toggle media fullscreen"
+        onPressed: {
+            const screenState = ShellState.forActive();
+            screenState.mediaFullscreen = !screenState.mediaFullscreen;
         }
     }
 

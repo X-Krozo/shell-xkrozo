@@ -23,17 +23,35 @@ Item {
     }
 
     property real offsetScale: shouldBeActive ? 0 : 1
+    property bool useLiveHeight: false
+    property real frozenHeight: 0
+    property real liveContentHeight: 0
+    property Item contentItem: content.item
+
+    onContentItemChanged: {
+        if (contentItem)
+            liveContentHeight = contentItem.implicitHeight;
+    }
+
+    Connections {
+        target: root.contentItem
+        function onImplicitHeightChanged() {
+            root.liveContentHeight = root.contentItem.implicitHeight;
+        }
+    }
 
     onShouldBeActiveChanged: {
-        if (shouldBeActive)
-            implicitHeight = Qt.binding(() => content.implicitHeight);
-        else
-            implicitHeight = implicitHeight; // Break binding during close anim
+        if (shouldBeActive) {
+            useLiveHeight = true;
+        } else {
+            frozenHeight = (root.contentItem ? root.contentItem.implicitHeight : content.implicitHeight);
+            useLiveHeight = false;
+        }
     }
 
     visible: offsetScale < 1
     anchors.bottomMargin: (-implicitHeight - 5) * offsetScale
-    implicitHeight: content.implicitHeight
+    implicitHeight: useLiveHeight ? liveContentHeight + (content.item?.showingGrid ? 17 : 0) : frozenHeight
     implicitWidth: content.implicitWidth || 630 // Hard coded fallback for first open
     opacity: 1 - offsetScale
 
@@ -46,12 +64,13 @@ Item {
     Loader {
         id: content
 
-        anchors.top: parent.top
+        anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
 
         active: root.shouldBeActive || root.visible
 
         sourceComponent: Content {
+            screen: root.screen
             screenState: root.screenState
             panels: root.panels
             maxHeight: root.maxHeight

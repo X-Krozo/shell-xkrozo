@@ -10,6 +10,7 @@ import qs.utils
 
 Item {
     id: root
+    clip: true
 
     property string source: Wallpapers.current
     property CachingImage current
@@ -108,25 +109,49 @@ Item {
 
             anchors.fill: parent
 
+            property int transitionType: Math.floor(Math.random() * 3)
+            property real slideOffset: (Math.random() < 0.5 ? -1 : 1) * width * 0.08
+
             opacity: 0
+            scale: transitionType === 1 ? 1.08 : 1
+            x: transitionType === 2 ? slideOffset : 0
 
             onStatusChanged: {
                 if (status === Image.Ready)
                     anim.start();
             }
 
-            Anim on opacity {
+            ParallelAnimation {
                 id: anim
 
-                type: Anim.SlowEffects
-                running: false
-                from: 0
-                to: 1
+                Anim {
+                    target: img
+                    property: "opacity"
+                    from: 0
+                    to: 1
+                    type: Anim.SlowEffects
+                }
+
+                Anim {
+                    target: img
+                    property: "scale"
+                    from: img.transitionType === 1 ? 1.08 : 1
+                    to: 1
+                    type: Anim.DefaultSpatial
+                }
+
+                Anim {
+                    target: img
+                    property: "x"
+                    from: img.transitionType === 2 ? img.slideOffset : 0
+                    to: 0
+                    type: Anim.DefaultSpatial
+                }
             }
 
             Timer {
                 running: root.current !== img && root.current?.status === Image.Ready
-                interval: anim.duration
+                interval: Tokens.anim.durations.expressiveSlowEffects
                 onTriggered: img.destroy()
             }
         }

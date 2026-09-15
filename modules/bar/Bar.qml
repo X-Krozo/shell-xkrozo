@@ -20,12 +20,41 @@ GridLayout {
     required property bool horizontal
     readonly property int axisPadding: Tokens.padding.large
 
+    // Centered-bar support: entries around a spacer-delimited "workspaces" entry
+    // are split into left / center / right groups when horizontal.
+    readonly property var enabledEntries: root.Config.bar.entries.filter(e => e.enabled ?? true)
+    readonly property int wsIdx: {
+        for (let i = 0; i < enabledEntries.length; i++)
+            if (enabledEntries[i].id === "workspaces")
+                return i;
+        return -1;
+    }
+    readonly property bool centered: horizontal && wsIdx >= 1 && wsIdx < enabledEntries.length - 1 && enabledEntries[wsIdx - 1].id === "spacer" && enabledEntries[wsIdx + 1].id === "spacer"
+    readonly property var leftEntries: centered ? enabledEntries.slice(0, wsIdx) : []
+    readonly property var centerEntries: centered ? [enabledEntries[wsIdx]] : []
+    readonly property var rightEntries: centered ? enabledEntries.slice(wsIdx + 2) : []
+    readonly property list<Item> groupContainers: centered ? [leftGroup, centerGroup, rightGroup] : [root]
+
+    function allWrappers(): var {
+        const out = [];
+        for (let c = 0; c < groupContainers.length; c++) {
+            const container = groupContainers[c];
+            for (let i = 0; i < container.children.length; i++) {
+                const w = container.children[i];
+                if (w instanceof EntryWrapper)
+                    out.push(w);
+            }
+        }
+        return out;
+    }
+
     function closeTray(): void {
         if (!Config.bar.tray.compact)
             return;
 
-        for (let i = 0; i < repeater.count; i++) {
-            const tray = (repeater.itemAt(i) as EntryWrapper).item as Tray;
+        const wrappers = allWrappers();
+        for (let i = 0; i < wrappers.length; i++) {
+            const tray = wrappers[i].item as Tray;
             if (tray)
                 tray.expanded = false;
         }
@@ -36,13 +65,77 @@ GridLayout {
         return horizontal ? c.x : c.y;
     }
 
+    function wrapperAt(x: real, y: real): EntryWrapper {
+        for (let c = 0; c < groupContainers.length; c++) {
+            const container = groupContainers[c];
+            const pos = container.mapFromItem(root, x, y);
+            const ch = container.childAt(pos.x, pos.y);
+            if (ch instanceof EntryWrapper)
+                return ch;
+        }
+        return null;
+    }
+
     function entryAt(pos: real): string {
-        const ch = (horizontal ? childAt(pos, height / 2) : childAt(width / 2, pos)) as EntryWrapper;
+        const ch = horizontal ? wrapperAt(pos, height / 2) : wrapperAt(width / 2, pos);
         return ch?.entryId ?? "";
     }
 
+    // Open a popout, or close it if it's already the open one (toggle).
+    function togglePopout(name: string, center: Item): void {
+        if (popouts.hasCurrent && popouts.currentName === name) {
+            popouts.hasCurrent = false;
+            return;
+        }
+        popouts.currentName = name;
+        if (center)
+            popouts.currentCenter = Qt.binding(() => axisCenterOf(center));
+        popouts.hasCurrent = true;
+    }
+
+    // Toggle a specific tray item's context-menu popout (used on tray right-click).
+    function toggleTrayMenu(item: var, trayItem: Item): void {
+        const name = `traymenu${item.id}`;
+        if (popouts.hasCurrent && popouts.currentName === name) {
+            popouts.hasCurrent = false;
+            return;
+        }
+        popouts.currentName = name;
+        popouts.currentCenter = Qt.binding(() => axisCenterOf(trayItem));
+        popouts.hasCurrent = true;
+    }
+
+    // Tray apps whose SNI "Activate" does nothing (e.g. SDL appindicator items like
+    // Tauon). Keyed by tray item id/title -> how to focus-or-launch them.
+    readonly property var trayLaunchers: ({
+        // title/id: { command list, window classes to focus if running }
+        "tauonmb": { command: ["tauonmb"], classes: ["tauon"] }
+    })
+
+    // Left-click on a tray item: open the app. Falls back to Hyprland focus/launch
+    // for apps in trayLaunchers (whose tray "Activate" does nothing).
+    function openTrayApp(item: var, trayItem: Item, index: int): void {
+        const entry = trayLaunchers[item.title] ?? trayLaunchers[item.id] ?? null;
+        if (entry && entry.command) {
+            const classes = entry.classes ?? [];
+            const toplevel = Hypr.toplevels.values.find(t => classes.some(c => (t.lastIpcObject.class ?? "").toLowerCase().includes(c.toLowerCase())));
+            if (toplevel) {
+                if (Hypr.usingLua)
+                    Hypr.dispatch(`hl.dsp.focus({ window = "address:0x${toplevel.address}" })`);
+                else
+                    Hypr.dispatch(`focuswindow address:0x${toplevel.address}`);
+            } else {
+                Quickshell.execDetached(entry.command);
+            }
+        } else if (item.onlyMenu) {
+            toggleTrayMenu(item, trayItem);
+        } else {
+            item.activate();
+        }
+    }
+
     function checkPopout(pos: real): void {
-        const ch = (horizontal ? childAt(pos, height / 2) : childAt(width / 2, pos)) as EntryWrapper;
+        const ch = horizontal ? wrapperAt(pos, height / 2) : wrapperAt(width / 2, pos);
 
         if (ch?.entryId !== "tray")
             closeTray();
@@ -53,25 +146,21 @@ GridLayout {
         }
 
         const id = ch.entryId;
-        const start = horizontal ? ch.x : ch.y;
+        const rootPos = ch.mapToItem(root, 0, 0);
+        const start = horizontal ? rootPos.x : rootPos.y;
 
         if (id === "statusIcons" && Config.bar.popouts.statusIcons) {
             const items = (ch.item as StatusIcons).items;
             const icon = horizontal ? items.childAt(mapToItem(items, pos, 0).x, items.height / 2) : items.childAt(items.width / 2, mapToItem(items, 0, pos).y);
-            if (icon) {
-                popouts.currentName = icon.name;
-                popouts.currentCenter = Qt.binding(() => axisCenterOf(icon));
-                popouts.hasCurrent = true;
-            }
+            if (icon)
+                togglePopout(icon.name, icon);
         } else if (id === "tray" && Config.bar.popouts.tray) {
             const tray = ch.item as Tray;
             if (!Config.bar.tray.compact || (tray.expanded && !tray.expandIcon.contains(horizontal ? mapToItem(tray.expandIcon, pos, tray.implicitHeight / 2) : mapToItem(tray.expandIcon, tray.implicitWidth / 2, pos)))) {
                 const index = Math.floor(((pos - start - tray.padding * 2 + tray.spacing) / (horizontal ? tray.layout.implicitWidth : tray.layout.implicitHeight)) * tray.items.count);
-                const trayItem = tray.items.itemAt(index);
-                if (trayItem) {
-                    popouts.currentName = `traymenu${index}`;
-                    popouts.currentCenter = Qt.binding(() => axisCenterOf(trayItem));
-                    popouts.hasCurrent = true;
+                const trayItem = tray.items.itemAt(index) as TrayItem;
+                if (trayItem?.modelData) {
+                    togglePopout(`traymenu${trayItem.modelData.id}`, trayItem);
                 } else {
                     popouts.hasCurrent = false;
                 }
@@ -80,16 +169,14 @@ GridLayout {
                 tray.expanded = true;
             }
         } else if (id === "activeWindow" && Config.bar.popouts.activeWindow && Config.bar.activeWindow.showOnHover) {
-            popouts.currentName = id.toLowerCase();
-            popouts.currentCenter = axisCenterOf(ch.item as Item);
-            popouts.hasCurrent = true;
+            togglePopout(id.toLowerCase(), ch.item as Item);
         } else if (id === "power" && horizontal) {
             popouts.hasCurrent = false;
         }
     }
 
     function handleWheel(pos: real, angleDelta: point): void {
-        const ch = (horizontal ? childAt(pos, height / 2) : childAt(width / 2, pos)) as EntryWrapper;
+        const ch = horizontal ? wrapperAt(pos, height / 2) : wrapperAt(width / 2, pos);
         if (ch?.entryId === "workspaces" && Config.bar.scrollActions.workspaces) {
             // Workspace scroll
             const mon = (GlobalConfig.bar.workspaces.perMonitorWorkspaces ? Hypr.monitorFor(screen) : Hypr.focusedMonitor);
@@ -118,87 +205,155 @@ GridLayout {
     rowSpacing: Tokens.spacing.medium
     columnSpacing: Tokens.spacing.medium
 
+    // Wrapper so the three groups can use anchors without fighting the bar's layout
+    Item {
+        visible: root.centered
+        Layout.fillWidth: true
+        implicitHeight: Math.max(leftGroup.implicitHeight, centerGroup.implicitHeight, rightGroup.implicitHeight)
+
+        RowLayout {
+            id: leftGroup
+
+            visible: root.centered
+            spacing: root.columnSpacing
+            anchors.left: parent.left
+            anchors.leftMargin: root.axisPadding
+            anchors.verticalCenter: parent.verticalCenter
+
+            Repeater {
+                model: ScriptModel {
+                    values: root.leftEntries
+                }
+
+                delegate: BarChooser {}
+            }
+        }
+
+        RowLayout {
+            id: centerGroup
+
+            visible: root.centered
+            spacing: root.columnSpacing
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.verticalCenter: parent.verticalCenter
+
+            Repeater {
+                model: ScriptModel {
+                    values: root.centerEntries
+                }
+
+                delegate: BarChooser {}
+            }
+        }
+
+        RowLayout {
+            id: rightGroup
+
+            visible: root.centered
+            spacing: root.columnSpacing
+            anchors.right: parent.right
+            anchors.rightMargin: root.axisPadding
+            anchors.verticalCenter: parent.verticalCenter
+
+            Repeater {
+                model: ScriptModel {
+                    values: root.rightEntries
+                }
+
+                delegate: BarChooser {}
+            }
+        }
+    }
+
     Repeater {
         id: repeater
 
         model: ScriptModel {
-            values: root.Config.bar.entries.filter(e => e.enabled ?? true)
+            values: root.centered ? [] : root.enabledEntries
         }
 
-        DelegateChooser {
-            role: "id"
+        delegate: BarChooser {}
+    }
 
-            DelegateChoice {
-                roleValue: "spacer"
-                delegate: EntryWrapper {
-                    Layout.fillHeight: !root.horizontal
-                    Layout.fillWidth: root.horizontal
+    component BarChooser: DelegateChooser {
+        role: "id"
+
+        DelegateChoice {
+            roleValue: "spacer"
+            delegate: EntryWrapper {
+                implicitWidth: root.centered ? root.columnSpacing : 0
+                Layout.fillHeight: !root.horizontal
+                Layout.fillWidth: root.horizontal && !root.centered
+            }
+        }
+        DelegateChoice {
+            roleValue: "logo"
+            delegate: EntryWrapper {
+                OsIcon {
+                    objectName: "taskbarLogo"
                 }
             }
-            DelegateChoice {
-                roleValue: "logo"
-                delegate: EntryWrapper {
-                    OsIcon {
-                        objectName: "taskbarLogo"
-                    }
+        }
+        DelegateChoice {
+            roleValue: "workspaces"
+            delegate: EntryWrapper {
+                Workspaces {
+                    objectName: "taskbarWorkspaces"
+                    screen: root.screen
+                    fullscreen: root.fullscreen
+                    horizontal: root.horizontal
                 }
             }
-            DelegateChoice {
-                roleValue: "workspaces"
-                delegate: EntryWrapper {
-                    Workspaces {
-                        objectName: "taskbarWorkspaces"
-                        screen: root.screen
-                        fullscreen: root.fullscreen
-                        horizontal: root.horizontal
-                    }
+        }
+        DelegateChoice {
+            roleValue: "activeWindow"
+            delegate: EntryWrapper {
+                visible: false
+                implicitWidth: 0
+                implicitHeight: 0
+
+                ActiveWindow {
+                    objectName: "taskbarActiveWindow"
+                    bar: root
+                    horizontal: root.horizontal
+                    visible: false
                 }
             }
-            DelegateChoice {
-                roleValue: "activeWindow"
-                delegate: EntryWrapper {
-                    ActiveWindow {
-                        objectName: "taskbarActiveWindow"
-                        bar: root
-                        monitor: Brightness.getMonitorForScreen(root.screen)
-                        horizontal: root.horizontal
-                    }
+        }
+        DelegateChoice {
+            roleValue: "tray"
+            delegate: EntryWrapper {
+                Tray {
+                    objectName: "taskbarTray"
+                    horizontal: root.horizontal
+                    bar: root
                 }
             }
-            DelegateChoice {
-                roleValue: "tray"
-                delegate: EntryWrapper {
-                    Tray {
-                        objectName: "taskbarTray"
-                        horizontal: root.horizontal
-                    }
+        }
+        DelegateChoice {
+            roleValue: "clock"
+            delegate: EntryWrapper {
+                Clock {
+                    objectName: "taskbarClock"
+                    horizontal: root.horizontal
                 }
             }
-            DelegateChoice {
-                roleValue: "clock"
-                delegate: EntryWrapper {
-                    Clock {
-                        objectName: "taskbarClock"
-                        horizontal: root.horizontal
-                    }
+        }
+        DelegateChoice {
+            roleValue: "statusIcons"
+            delegate: EntryWrapper {
+                StatusIcons {
+                    objectName: "taskbarStatusIcons"
+                    horizontal: root.horizontal
                 }
             }
-            DelegateChoice {
-                roleValue: "statusIcons"
-                delegate: EntryWrapper {
-                    StatusIcons {
-                        objectName: "taskbarStatusIcons"
-                        horizontal: root.horizontal
-                    }
-                }
-            }
-            DelegateChoice {
-                roleValue: "power"
-                delegate: EntryWrapper {
-                    Power {
-                        objectName: "taskbarPowerButton"
-                        screenState: root.screenState
-                    }
+        }
+        DelegateChoice {
+            roleValue: "power"
+            delegate: EntryWrapper {
+                Power {
+                    objectName: "taskbarPowerButton"
+                    screenState: root.screenState
                 }
             }
         }
@@ -212,8 +367,6 @@ GridLayout {
 
         Layout.topMargin: !root.horizontal && index === 0 ? root.axisPadding : 0
         Layout.bottomMargin: !root.horizontal && index === repeater.count - 1 ? root.axisPadding : 0
-        Layout.leftMargin: root.horizontal && index === 0 ? root.axisPadding : 0
-        Layout.rightMargin: root.horizontal && index === repeater.count - 1 ? root.axisPadding : 0
         Layout.alignment: root.horizontal ? Qt.AlignVCenter : Qt.AlignHCenter
 
         implicitWidth: item?.implicitWidth ?? 0

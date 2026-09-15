@@ -20,6 +20,7 @@ CustomMouseArea {
     required property bool fullscreen
 
     property point dragStart
+    property bool dragMoved
     property bool dashboardShortcutActive
     property bool osdShortcutActive
     property bool utilitiesShortcutActive
@@ -73,6 +74,13 @@ CustomMouseArea {
         return inTopPanel(panels.dashboard, x, y);
     }
 
+    function inDashboardDragStart(x: real, y: real): bool {
+        const edgeThreshold = Math.max(Config.border.minThickness, Config.dashboard.dragThreshold);
+        if (geometry.dashboardOnLeft)
+            return x < edgeThreshold;
+        return y < edgeThreshold && !(geometry.barOnTop && geometry.barContains(x, y));
+    }
+
     function onWheel(event: WheelEvent): void {
         if (fullscreen)
             return;
@@ -82,14 +90,27 @@ CustomMouseArea {
     }
 
     anchors.fill: parent
-    acceptedButtons: fullscreen ? Qt.NoButton : Qt.AllButtons
+    acceptedButtons: (fullscreen || screenState.mediaFullscreen) ? Qt.NoButton : Qt.AllButtons
     hoverEnabled: true
 
-    onPressed: event => dragStart = Qt.point(event.x, event.y)
+    onPressed: event => {
+        dragStart = Qt.point(event.x, event.y);
+        dragMoved = false;
+    }
+    onClicked: event => {
+        if (geometry.barContains(event.x, event.y)) {
+            bar.checkPopout(geometry.axisPos(event.x, event.y));
+        } else if (!dragMoved) {
+            screenState.osd = false;
+            screenState.utilities = false;
+            screenState.appVolumes = false;
+        }
+        dragMoved = false;
+    }
     onContainsMouseChanged: {
         if (!containsMouse) {
             // Only hide if not activated by shortcut
-            if (!osdShortcutActive) {
+            if (!osdShortcutActive && !screenState.session) {
                 screenState.osd = false;
                 root.panels.osd.hovered = false;
             }
@@ -122,6 +143,9 @@ CustomMouseArea {
         const dragX = x - dragStart.x;
         const dragY = y - dragStart.y;
 
+        if (pressed && (Math.abs(dragX) > Config.border.minThickness || Math.abs(dragY) > Config.border.minThickness))
+            dragMoved = true;
+
         if (fullscreen) {
             root.panels.osd.hovered = inRightPanel(panels.osdWrapper, x, y);
             return;
@@ -141,11 +165,10 @@ CustomMouseArea {
         }
 
         if (panels.sidebar.offsetScale === 1) {
-            // Show osd on hover
-            const showOsd = inRightPanel(panels.osdWrapper, x, y);
+            // Keep osd pinned while the pointer is over it; always update visibility based on hover if not in shortcut mode
+            const showOsd = root.inRightPanel(panels.osdWrapper, x, y) && root.screenState.osd;
 
-            // Always update visibility based on hover if not in shortcut mode
-            if (!osdShortcutActive) {
+            if (!osdShortcutActive && !screenState.session) {
                 screenState.osd = showOsd;
                 root.panels.osd.hovered = showOsd;
             } else if (showOsd) {
@@ -154,7 +177,8 @@ CustomMouseArea {
                 root.panels.osd.hovered = true;
             }
 
-            const showSidebar = pressed && dragStart.x > Math.min(width - Config.border.minThickness, geometry.insetLeft(borderThickness) + panels.sidebar.x);
+            const sidebarEdge = dragStart.x > width - Math.max(Config.border.minThickness, Config.sidebar.dragThreshold);
+            const showSidebar = pressed && (sidebarEdge || dragStart.x > Math.min(width - Config.border.minThickness, geometry.insetLeft(borderThickness) + panels.sidebar.x));
 
             // Show sidebar on hover (top-right corner, bounded by notification panel height)
             if (Config.sidebar.showOnHover) {
@@ -166,10 +190,12 @@ CustomMouseArea {
 
             // Show/hide session on drag
             if (pressed && inRightPanel(panels.sessionWrapper, dragStart.x, dragStart.y) && withinPanelHeight(panels.sessionWrapper, x, y)) {
-                if (dragX < -Config.session.dragThreshold)
+                if (dragX < -Config.session.dragThreshold) {
                     screenState.session = true;
-                else if (dragX > Config.session.dragThreshold)
+                    screenState.osd = true;
+                } else if (dragX > Config.session.dragThreshold) {
                     screenState.session = false;
+                }
 
                 // Show sidebar on drag if in session area and session is nearly fully visible
                 if (showSidebar && panels.session.offsetScale <= 0 && dragX < -Config.sidebar.dragThreshold)
@@ -180,11 +206,10 @@ CustomMouseArea {
             }
         } else {
             const outOfSidebar = x < width - panels.sidebar.width * (1 - panels.sidebar.offsetScale);
-            // Show osd on hover
-            const showOsd = outOfSidebar && inRightPanel(panels.osdWrapper, x, y);
+            // Keep osd pinned while the pointer is over it; always update visibility based on hover if not in shortcut mode
+            const showOsd = root.inRightPanel(panels.osdWrapper, x, y) && root.screenState.osd;
 
-            // Always update visibility based on hover if not in shortcut mode
-            if (!osdShortcutActive) {
+            if (!osdShortcutActive && !screenState.session) {
                 screenState.osd = showOsd;
                 root.panels.osd.hovered = showOsd;
             } else if (showOsd) {
@@ -195,10 +220,12 @@ CustomMouseArea {
 
             // Show/hide session on drag
             if (pressed && outOfSidebar && inRightPanel(panels.sessionWrapper, dragStart.x, dragStart.y) && withinPanelHeight(panels.sessionWrapper, x, y)) {
-                if (dragX < -Config.session.dragThreshold)
+                if (dragX < -Config.session.dragThreshold) {
                     screenState.session = true;
-                else if (dragX > Config.session.dragThreshold)
+                    screenState.osd = true;
+                } else if (dragX > Config.session.dragThreshold) {
                     screenState.session = false;
+                }
             }
 
             // Show/hide sidebar on hover
@@ -230,6 +257,14 @@ CustomMouseArea {
                 screenState.launcher = false;
         }
 
+        // Show/hide utilities on an upward/downward drag from the bottom-right edge
+        if (pressed && inBottomPanel(panels.utilities, dragStart.x, dragStart.y, true) && withinPanelWidth(panels.utilities, x, y)) {
+            if (dragY < -Config.session.dragThreshold)
+                screenState.utilities = true;
+            else if (dragY > Config.session.dragThreshold)
+                screenState.utilities = false;
+        }
+
         // Show dashboard on hover
         const showDashboard = Config.dashboard.showOnHover && inDashboardArea(x, y);
 
@@ -242,7 +277,9 @@ CustomMouseArea {
         }
 
         // Show/hide dashboard on drag (for touchscreen devices)
-        if (pressed && inDashboardArea(dragStart.x, dragStart.y) && (geometry.dashboardOnLeft ? withinPanelHeight(panels.dashboard, x, y) : withinPanelWidth(panels.dashboard, x, y))) {
+        const dashboardDragStart = inDashboardDragStart(dragStart.x, dragStart.y);
+        const dashboardInPanel = geometry.dashboardOnLeft ? withinPanelHeight(panels.dashboard, x, y) : withinPanelWidth(panels.dashboard, x, y);
+        if (pressed && (inDashboardArea(dragStart.x, dragStart.y) || dashboardDragStart) && (dashboardDragStart || dashboardInPanel)) {
             const dashDrag = geometry.dashboardOnLeft ? dragX : dragY;
             if (dashDrag > Config.dashboard.dragThreshold)
                 screenState.dashboard = true;
@@ -250,30 +287,6 @@ CustomMouseArea {
                 screenState.dashboard = false;
         }
 
-        // Show utilities on hover; on a bottom bar it rides the power entry instead of an edge zone
-        let showUtilities;
-        if (geometry.barOnBottom) {
-            const entry = geometry.barContains(x, y) ? bar.entryAt(geometry.axisPos(x, y)) : "";
-            showUtilities = entry === "power" || (screenState.utilities && !entry && inBottomPanel(panels.utilities, x, y, true));
-        } else {
-            showUtilities = inBottomPanel(panels.utilities, x, y, true);
-        }
-
-        // Always update visibility based on hover if not in shortcut mode
-        if (!utilitiesShortcutActive) {
-            screenState.utilities = showUtilities;
-        } else if (showUtilities) {
-            // If hovering over utilities area while in shortcut mode, transition to hover control
-            utilitiesShortcutActive = false;
-        }
-
-        // Show popouts on hover
-        if (geometry.barContains(x, y)) {
-            bar.checkPopout(geometry.axisPos(x, y));
-        } else if ((!popouts.currentName.startsWith("traymenu") || ((popouts.current as StackView)?.depth ?? 0) <= 1) && !inPopoutArea(x, y)) {
-            popouts.hasCurrent = false;
-            bar.closeTray();
-        }
     }
 
     // Monitor individual visibility changes

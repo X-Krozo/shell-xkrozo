@@ -63,15 +63,16 @@ StyledWindow {
         screenState.launcher = false;
         screenState.session = false;
         screenState.dashboard = false;
+        screenState.mediaFullscreen = false;
         panels.popouts.close();
     }
 
     name: "drawers"
     WlrLayershell.exclusionMode: ExclusionMode.Ignore
     WlrLayershell.layer: (fsTransitionProg > 0 && contentItem.Config.general.showOverFullscreen) || (hasSpecialWorkspace && hasFullscreenOnNormalWs) ? WlrLayer.Overlay : WlrLayer.Top
-    WlrLayershell.keyboardFocus: screenState.launcher || screenState.session ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: screenState.launcher || screenState.session || screenState.mediaFullscreen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
-    mask: hasFullscreen ? emptyRegion : regions
+    mask: mediaFullscreen.appearanceActive ? null : (hasFullscreen ? emptyRegion : regions)
 
     anchors.top: true
     anchors.bottom: true
@@ -125,7 +126,7 @@ StyledWindow {
         active: {
             const s = root.screenState;
             const conf = root.contentItem.Config;
-            if ((s.launcher && conf.launcher.enabled) || (s.session && conf.session.enabled) || (s.sidebar && conf.sidebar.enabled))
+            if ((s.launcher && conf.launcher.enabled) || (s.session && conf.session.enabled) || (s.sidebar && conf.sidebar.enabled) || (s.utilities && conf.utilities.enabled) || root.screenState.appVolumes || root.screenState.mediaFullscreen)
                 return true;
             if (!conf.dashboard.showOnHover && s.dashboard && conf.dashboard.enabled)
                 return true;
@@ -138,10 +139,21 @@ StyledWindow {
             root.screenState.launcher = false;
             root.screenState.session = false;
             root.screenState.sidebar = false;
+            root.screenState.utilities = false;
+            root.screenState.appVolumes = false;
             root.screenState.dashboard = false;
+            root.screenState.mediaFullscreen = false;
             panels.popouts.hasCurrent = false;
             bar.closeTray();
         }
+    }
+
+    FullscreenMedia {
+        id: mediaFullscreen
+
+        screenState: root.screenState
+        geometry: geometry
+        borderThickness: root.borderThickness
     }
 
     StyledRect {
@@ -196,6 +208,15 @@ StyledWindow {
 
             panel: panels.launcher
             deformAmount: 0.1
+        }
+
+        PanelBg {
+            id: volumeDockBg
+
+            panel: panels.volumeDockWrapper
+            deformAmount: 0.25
+            x: panels.volumeDockWrapper.x + panels.volumeDock.x + geometry.insetLeft(root.borderThickness)
+            implicitWidth: panels.volumeDock.width
         }
 
         PanelBg {
@@ -299,6 +320,9 @@ StyledWindow {
             osd.transform: Matrix4x4 {
                 matrix: osdBg.deformMatrix
             }
+            volumeDock.transform: Matrix4x4 {
+                matrix: volumeDockBg.deformMatrix
+            }
             notifications.transform: Matrix4x4 {
                 matrix: notifsBg.deformMatrix
             }
@@ -327,7 +351,7 @@ StyledWindow {
             popouts: panels.popouts
             position: geometry.position
 
-            fullscreen: root.hasFullscreen
+fullscreen: root.hasFullscreen
         }
     }
 
