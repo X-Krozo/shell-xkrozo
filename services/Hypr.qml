@@ -18,8 +18,10 @@ Singleton {
     readonly property bool usingLua: Hyprland.usingLua
 
     readonly property HyprlandToplevel activeToplevel: {
-        const t = Hyprland.activeToplevel;
-        return t?.workspace?.name.startsWith("special:") || Hyprland.focusedWorkspace?.toplevels.values.length > 0 ? t : null;
+        if (Hyprland.activeToplevel && Hyprland.activeToplevel.workspace?.id === Hyprland.focusedWorkspace?.id)
+            return Hyprland.activeToplevel;
+
+        return Hyprland.toplevels.values.find(t => t.workspace?.id === Hyprland.focusedWorkspace?.id && t.lastIpcObject.focusHistoryID === 0) ?? null;
     }
     readonly property HyprlandWorkspace focusedWorkspace: Hyprland.focusedWorkspace
     readonly property HyprlandMonitor focusedMonitor: Hyprland.focusedMonitor
@@ -95,7 +97,14 @@ Singleton {
         }
     }
 
-    Component.onCompleted: reloadDynamicConfs()
+    Component.onCompleted: {
+        reloadDynamicConfs();
+        Qt.callLater(() => {
+            Hyprland.refreshToplevels();
+            Hyprland.refreshWorkspaces();
+            Hyprland.refreshMonitors();
+        });
+    }
 
     onCapsLockChanged: {
         if (!GlobalConfig.utilities.toasts.capsLockChanged)
@@ -127,7 +136,7 @@ Singleton {
     Connections {
         function onRawEvent(event: HyprlandEvent): void {
             const n = event.name;
-            if (n.endsWith("v2"))
+            if (n.endsWith("v2") && n !== "activewindowv2")
                 return;
 
             if (n === "configreloaded") {

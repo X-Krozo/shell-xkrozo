@@ -62,7 +62,7 @@ Item {
             Variants {
                 id: playerList
 
-                model: Players.list
+                model: Players.list.filter(p => (p as MprisPlayer).dbusName !== "org.mpris.MediaPlayer2.playerctld")
 
                 PlayerItem {}
             }
