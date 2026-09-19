@@ -13,6 +13,7 @@ Item {
     id: root
 
     required property ScreenState screenState
+    required property bool onLeft
     readonly property FileDialog facePicker: FileDialog {
         title: Tr.tr("Select a profile picture")
         filterLabel: Tr.tr("Image files")
@@ -32,7 +33,8 @@ Item {
     property real offsetScale: shouldBeActive ? 0 : 1
 
     visible: offsetScale < 1
-    anchors.topMargin: (-implicitHeight - 5) * offsetScale
+    anchors.topMargin: onLeft ? 0 : (-implicitHeight - 5) * offsetScale
+    anchors.leftMargin: onLeft ? (-implicitWidth - 5) * offsetScale : 0
     implicitHeight: content.implicitHeight
     implicitWidth: content.implicitWidth || 854 // Hard coded fallback for first open
     opacity: 1 - offsetScale
@@ -44,8 +46,10 @@ Item {
     Loader {
         id: content
 
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
+        anchors.horizontalCenter: root.onLeft ? undefined : parent.horizontalCenter
+        anchors.verticalCenter: root.onLeft ? parent.verticalCenter : undefined
+        anchors.bottom: root.onLeft ? undefined : parent.bottom
+        anchors.right: root.onLeft ? parent.right : undefined
 
         active: root.shouldBeActive || root.visible
 

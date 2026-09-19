@@ -12,6 +12,8 @@ import qs.modules.bar.components.status
 StyledRect {
     id: root
 
+    required property bool horizontal
+
     property color colour: Colours.palette.m3secondary
     readonly property alias items: iconColumn
 
@@ -44,18 +46,25 @@ StyledRect {
     radius: Tokens.rounding.full
 
     clip: true
-    implicitWidth: Tokens.sizes.bar.innerWidth
-    implicitHeight: iconColumn.implicitHeight + Tokens.padding.medium * 2
+    implicitWidth: horizontal ? iconColumn.implicitWidth + Tokens.padding.medium * 2 : Tokens.sizes.bar.innerWidth
+    implicitHeight: horizontal ? Tokens.sizes.bar.innerWidth : iconColumn.implicitHeight + Tokens.padding.medium * 2
 
-    ColumnLayout {
+    GridLayout {
         id: iconColumn
 
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: Tokens.padding.medium
+        // Only one orientation's anchors resolve, the others are undefined
+        // qmllint disable Quick.anchor-combinations
+        anchors.left: horizontal ? undefined : parent.left
+        anchors.right: horizontal ? undefined : parent.right
+        anchors.bottom: horizontal ? undefined : parent.bottom
+        anchors.horizontalCenter: horizontal ? parent.horizontalCenter : undefined
+        anchors.verticalCenter: horizontal ? parent.verticalCenter : undefined
+        anchors.bottomMargin: horizontal ? 0 : Tokens.padding.medium
+        // qmllint enable Quick.anchor-combinations
 
-        spacing: 0
+        columns: horizontal ? -1 : 1
+        rowSpacing: spacing
+        columnSpacing: spacing
 
         Repeater {
             model: ScriptModel {
@@ -151,14 +160,18 @@ StyledRect {
         required property int index
         property int margin: root.spacing / 2
         readonly property bool present: !root.collapsed(modelData)
-        property real topGap: present && index !== root.firstPresent ? margin : 0
-        property real bottomGap: present && index !== root.lastPresent ? margin : 0
+        property real topGap: !horizontal && present && index !== root.firstPresent ? margin : 0
+        property real bottomGap: !horizontal && present && index !== root.lastPresent ? margin : 0
+        property real leftGap: horizontal && present && index !== root.firstPresent ? margin : 0
+        property real rightGap: horizontal && present && index !== root.lastPresent ? margin : 0
         default property Item item
         property string name: modelData.id.toLowerCase()
 
+        Layout.alignment: horizontal ? Qt.AlignVCenter : Qt.AlignHCenter
         Layout.topMargin: Math.round(topGap)
         Layout.bottomMargin: Math.round(bottomGap)
-        Layout.alignment: Qt.AlignHCenter
+        Layout.leftMargin: Math.round(leftGap)
+        Layout.rightMargin: Math.round(rightGap)
 
         implicitWidth: item?.implicitWidth ?? 0
         implicitHeight: item?.implicitHeight ?? 0
@@ -172,6 +185,18 @@ StyledRect {
         }
 
         Behavior on bottomGap {
+            Anim {
+                type: Anim.SlowEffects
+            }
+        }
+
+        Behavior on leftGap {
+            Anim {
+                type: Anim.SlowEffects
+            }
+        }
+
+        Behavior on rightGap {
             Anim {
                 type: Anim.SlowEffects
             }

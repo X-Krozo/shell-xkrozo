@@ -59,7 +59,7 @@ Searcher {
             Colours.showPreview = false;
     }
 
-    list: wallpapers.entries
+    list: wallpapers.entries.filter(e => !e.relativePath.startsWith("Auto/"))
     key: "relativePath"
     useFuzzy: GlobalConfig.launcher.useFuzzy.wallpapers
     extraOpts: useFuzzy ? ({}) : ({

@@ -10,73 +10,97 @@ import qs.services
 StyledRect {
     id: root
 
-    required property Workspace activeWs
+    required property int activeWsId
+    required property Repeater workspaces
     required property Item mask
-    property alias contentColour: colouriser.colorizationColor
+    required property bool horizontal
 
-    property real start
-    property real end
+    property color indicatorColour: Colours.palette.m3primary
+    property color contentColour: Colours.palette.m3onPrimary
 
-    function runAnim(): void {
-        if (!activeWs)
-            return;
-
-        const newStart = activeWs.LazyListView.layoutY;
-        const goingUp = newStart < start;
-        const leadingDuration = Tokens.anim.durations.expressiveDefaultSpatial;
-        const trailingDuration = leadingDuration * (Config.bar.workspaces.activeTrail ? 1.5 : 1);
-
-        startAnim.stop();
-        endAnim.stop();
-        startAnim.to = newStart;
-        endAnim.to = newStart + activeWs.LazyListView.preferredHeight;
-        startAnim.duration = goingUp ? leadingDuration : trailingDuration;
-        endAnim.duration = goingUp ? trailingDuration : leadingDuration;
-        startAnim.start();
-        endAnim.start();
+    readonly property int currentWsIdx: {
+        let i = activeWsId - 1;
+        while (i < 0)
+            i += Config.bar.workspaces.shown;
+        return i % Config.bar.workspaces.shown;
     }
 
-    onActiveWsChanged: runAnim()
-    Component.onCompleted: runAnim()
+    property real leading: workspaces.count > 0 ? (horizontal ? workspaces.itemAt(currentWsIdx)?.x : workspaces.itemAt(currentWsIdx)?.y) ?? 0 : 0
+    property real trailing: workspaces.count > 0 ? (horizontal ? workspaces.itemAt(currentWsIdx)?.x : workspaces.itemAt(currentWsIdx)?.y) ?? 0 : 0
+    property real currentSize: workspaces.count > 0 ? (workspaces.itemAt(currentWsIdx) as Workspace)?.size ?? 0 : 0
+    property real offset: Math.min(leading, trailing)
+    property real size: {
+        const s = Math.abs(leading - trailing) + currentSize;
+        if (Config.bar.workspaces.activeTrail && lastWs > currentWsIdx) {
+            const ws = workspaces.itemAt(lastWs) as Workspace;
+            return ws ? Math.min((horizontal ? ws.x : ws.y) + ws.size - offset, s) : 0;
+        }
+        return s;
+    }
+
+    property int cWs
+    property int lastWs
+
+    onCurrentWsIdxChanged: {
+        lastWs = cWs;
+        cWs = currentWsIdx;
+    }
 
     clip: true
-    y: start + mask.y
-    implicitHeight: end - start
+    x: horizontal ? offset + mask.x : 0
+    y: horizontal ? 0 : offset + mask.y
+    implicitWidth: horizontal ? size : Tokens.sizes.bar.innerWidth - Tokens.padding.small
+    implicitHeight: horizontal ? Tokens.sizes.bar.innerWidth - Tokens.padding.small : size
     radius: Tokens.rounding.full
-    color: Colours.palette.m3primary
-
-    Anim on start {
-        id: startAnim
-    }
-
-    Anim on end {
-        id: endAnim
-    }
-
-    Connections {
-        function onLayoutYChanged(): void {
-            root.runAnim();
-        }
-
-        function onPreferredHeightChanged(): void {
-            root.runAnim();
-        }
-
-        target: root.activeWs?.LazyListView ?? null
-    }
+    color: root.indicatorColour
 
     Colouriser {
-        id: colouriser
-
         source: root.mask
         sourceColor: Colours.palette.m3onSurface
-        colorizationColor: Colours.palette.m3onPrimary
+        colorizationColor: root.contentColour
 
-        x: 0
-        y: -parent.start
-        implicitWidth: root.mask.width
-        implicitHeight: root.mask.height
+        x: root.horizontal ? -parent.offset : 0
+        y: root.horizontal ? 0 : -parent.offset
+        implicitWidth: root.mask.implicitWidth
+        implicitHeight: root.mask.implicitHeight
 
-        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.horizontalCenter: root.horizontal ? undefined : parent.horizontalCenter
+        anchors.verticalCenter: root.horizontal ? parent.verticalCenter : undefined
+    }
+
+    Behavior on leading {
+        enabled: Config.bar.workspaces.activeTrail
+
+        EAnim {}
+    }
+
+    Behavior on trailing {
+        enabled: Config.bar.workspaces.activeTrail
+
+        EAnim {
+            duration: Tokens.anim.durations.normal * 2
+        }
+    }
+
+    Behavior on currentSize {
+        enabled: Config.bar.workspaces.activeTrail
+
+        EAnim {}
+    }
+
+    Behavior on offset {
+        enabled: !Config.bar.workspaces.activeTrail
+
+        EAnim {}
+    }
+
+    Behavior on size {
+        enabled: !Config.bar.workspaces.activeTrail
+
+        EAnim {}
+    }
+
+    component EAnim: Anim {
+        type: Anim.Emphasized
     }
 }

@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Effects
+import QtQuick.Layouts
 import Quickshell
 import Quickshell.Hyprland
 import Caelestia
@@ -15,12 +16,20 @@ StyledClippingRect {
 
     required property ShellScreen screen
     required property bool fullscreen
+    required property bool horizontal
 
     readonly property HyprlandMonitor monitor: Hypr.monitorFor(screen)
     readonly property bool onSpecial: monitor?.lastIpcObject.specialWorkspace?.name !== ""
     readonly property int activeWsId: monitor.activeWorkspace?.id ?? 1
     readonly property int activeWsIdx: workspaceIndex(activeWsId)
     readonly property int shown: Math.max(1, Config.bar.workspaces.shown)
+
+    readonly property var occupied: {
+        const occ = {};
+        for (const ws of Hypr.workspaces.values)
+            occ[ws.id] = ws.lastIpcObject.windows > 0;
+        return occ;
+    }
 
     readonly property var wsIds: {
         if (Config.bar.workspaces.showUnoccupied)
@@ -39,11 +48,6 @@ StyledClippingRect {
         const start = Math.max(0, end - shown);
 
         return workspaces.slice(start, end).map(w => w.id);
-    }
-
-    readonly property var workspaces: {
-        workspaces.itemsDirty;
-        return wsIds.map(id => workspaces.itemAtIndex(workspaceIndex(id)));
     }
 
     // Only relevant for when showUnoccupied is true
@@ -65,8 +69,10 @@ StyledClippingRect {
         return index % shown;
     }
 
-    implicitWidth: Tokens.sizes.bar.innerWidth
-    implicitHeight: workspaces.layoutHeight + workspaces.anchors.margins * 2
+    readonly property int wsSpacing: Math.max(0, Math.floor(Tokens.spacing.extraSmall))
+
+    implicitWidth: horizontal ? layout.implicitWidth + Tokens.padding.small : Tokens.sizes.bar.innerWidth
+    implicitHeight: horizontal ? Tokens.sizes.bar.innerWidth : layout.implicitHeight + Tokens.padding.small
 
     color: Colours.tPalette.m3surfaceContainer
     radius: Tokens.rounding.full
@@ -93,8 +99,10 @@ StyledClippingRect {
             anchors.margins: Tokens.padding.extraSmall
 
             sourceComponent: OccupiedBg {
-                workspaces: root.workspaces
-                wsSpacing: workspaces.spacing
+                workspaces: workspaces
+                occupied: root.occupied
+                wsIds: root.wsIds
+                horizontal: root.horizontal
             }
 
             Behavior on opacity {
@@ -104,33 +112,34 @@ StyledClippingRect {
             }
         }
 
-        LazyListView {
-            id: workspaces
+        GridLayout {
+            id: layout
 
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.margins: Tokens.padding.extraSmall
-            implicitHeight: contentHeight
+            anchors.centerIn: parent
+            columns: root.horizontal ? -1 : 1
+            rowSpacing: root.wsSpacing
+            columnSpacing: root.wsSpacing
 
-            spacing: Tokens.spacing.extraSmall
-            removeDuration: Tokens.anim.durations.expressiveDefaultEffects
+            Repeater {
+                id: workspaces
 
-            model: ScriptModel {
-                values: root.wsIds
-            }
+                model: ScriptModel {
+                    values: root.wsIds
+                }
 
-            delegate: Workspace {
-                activeWsId: root.activeWsId
-                ws: Config.bar.workspaces.showUnoccupied ? root.groupOffset + index + 1 : modelData
-                monitor: root.monitor
+                delegate: Workspace {
+                    activeWsId: root.activeWsId
+                    ws: Config.bar.workspaces.showUnoccupied ? root.groupOffset + index + 1 : modelData
+                    monitor: root.monitor
+                    horizontal: root.horizontal
 
-                displayType: Config.bar.workspaces.displayType
-                showWindows: Config.bar.workspaces.showWindows
-                iconRules: GlobalConfig.bar.workspaces.workspaceIcons
-                activeLabel: Config.bar.workspaces.activeLabel
-                occupiedLabel: Config.bar.workspaces.occupiedLabel
-                label: Config.bar.workspaces.label
+                    displayType: Config.bar.workspaces.displayType
+                    showWindows: Config.bar.workspaces.showWindows
+                    iconRules: GlobalConfig.bar.workspaces.workspaceIcons
+                    activeLabel: Config.bar.workspaces.activeLabel
+                    occupiedLabel: Config.bar.workspaces.occupiedLabel
+                    label: Config.bar.workspaces.label
+                }
             }
         }
 
@@ -143,8 +152,9 @@ StyledClippingRect {
             anchors.margins: Tokens.padding.extraSmall
 
             sourceComponent: GapMarkers {
-                workspaces: root.workspaces
-                wsSpacing: workspaces.spacing
+                workspaces: workspaces
+                wsSpacing: root.wsSpacing
+                horizontal: root.horizontal
             }
 
             Behavior on opacity {
@@ -156,23 +166,22 @@ StyledClippingRect {
 
         Loader {
             asynchronous: true
-            anchors.left: workspaces.left
-            anchors.right: workspaces.right
+            anchors.horizontalCenter: root.horizontal ? undefined : parent.horizontalCenter
+            anchors.verticalCenter: root.horizontal ? parent.verticalCenter : undefined
             active: Config.bar.workspaces.activeIndicator
 
             sourceComponent: ActiveIndicator {
-                activeWs: {
-                    workspaces.itemsDirty;
-                    return workspaces.itemAtIndex(root.activeWsIdx) as Workspace;
-                }
-                mask: workspaces
+                activeWsId: root.activeWsId
+                workspaces: workspaces
+                mask: layout
+                horizontal: root.horizontal
             }
         }
 
         MouseArea {
-            anchors.fill: workspaces
+            anchors.fill: layout
             onClicked: event => {
-                const ws = (workspaces.itemAt(event.x, event.y) as Workspace)?.ws;
+                const ws = (layout.childAt(event.x, event.y) as Workspace)?.ws;
                 if (!ws)
                     return;
                 if (Hypr.activeWsId !== ws)
@@ -213,6 +222,7 @@ StyledClippingRect {
                 anchors.fill: parent
                 anchors.margins: Tokens.padding.extraSmall
                 monitor: root.monitor
+                horizontal: root.horizontal
 
                 scale: 0.5
                 Component.onCompleted: scale = Qt.binding(() => root.onSpecial ? 1 : 0.5)
@@ -237,6 +247,10 @@ StyledClippingRect {
     }
 
     Behavior on implicitHeight {
+        Anim {}
+    }
+
+    Behavior on implicitWidth {
         Anim {}
     }
 }

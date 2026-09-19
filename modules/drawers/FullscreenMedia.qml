@@ -21,6 +21,7 @@ FocusScope {
 
     required property ScreenState screenState
     required property Bar.BarWrapper bar
+    required property EdgeGeometry geometry
     required property real borderThickness
 
     readonly property bool shouldBeActive: root.screenState.mediaFullscreen
@@ -58,10 +59,10 @@ FocusScope {
     property color gradBottom: root.bottomColour
 
     anchors.fill: parent
-    anchors.leftMargin: root.bar.implicitWidth + root.borderThickness
-    anchors.topMargin: root.borderThickness
+    anchors.leftMargin: geometry.insetLeft(root.borderThickness)
+    anchors.topMargin: geometry.insetTop(root.borderThickness)
     anchors.rightMargin: root.borderThickness
-    anchors.bottomMargin: root.borderThickness
+    anchors.bottomMargin: geometry.barOnBottom ? geometry.insetBottom(root.borderThickness) : root.borderThickness
     visible: offsetScale < 1
     opacity: 1 - offsetScale
     transform: Translate {

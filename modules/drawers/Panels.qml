@@ -19,12 +19,11 @@ Item {
     required property ShellScreen screen
     required property ScreenState screenState
     required property Bar.BarWrapper bar
+    required property EdgeGeometry geometry
     required property real borderThickness
 
     readonly property alias osd: osd
     readonly property alias osdWrapper: osdWrapper
-    readonly property alias volumeDock: volumeDock
-    readonly property alias volumeDockWrapper: volumeDockWrapper
     readonly property alias notifications: notifications
     readonly property alias session: session
     readonly property alias sessionWrapper: sessionWrapper
@@ -38,30 +37,9 @@ Item {
 
     anchors.fill: parent
     anchors.margins: borderThickness
-    anchors.leftMargin: bar.implicitWidth
-
-    Item {
-        id: volumeDockWrapper
-
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: -volumeDock.tooltipExtent / 2
-        anchors.right: parent.right
-        anchors.rightMargin: osdWrapper.anchors.rightMargin + osdWrapper.implicitWidth
-        clip: volumeDock.offsetScale < 1
-
-        implicitWidth: volumeDock.implicitWidth * (1 - volumeDock.offsetScale)
-        implicitHeight: volumeDock.implicitHeight
-
-        Sidebar.VolumeDock {
-            id: volumeDock
-
-            screenState: root.screenState
-            osdOffset: osdWrapper.anchors.rightMargin + osdWrapper.implicitWidth
-
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.right: parent.right
-        }
-    }
+    anchors.leftMargin: geometry.insetLeft(borderThickness)
+    anchors.topMargin: geometry.insetTop(borderThickness)
+    anchors.bottomMargin: geometry.insetBottom(borderThickness)
 
     Item {
         id: osdWrapper
@@ -136,15 +114,19 @@ Item {
         id: dashboard
 
         screenState: root.screenState
+        onLeft: root.geometry.dashboardOnLeft
 
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.top: parent.top
+        anchors.horizontalCenter: root.geometry.dashboardOnLeft ? undefined : parent.horizontalCenter
+        anchors.top: root.geometry.dashboardOnLeft ? undefined : parent.top
+        anchors.verticalCenter: root.geometry.dashboardOnLeft ? parent.verticalCenter : undefined
+        anchors.left: root.geometry.dashboardOnLeft ? parent.left : undefined
     }
 
     BarPopouts.ClipWrapper {
         id: popoutsWrapper
 
         screen: root.screen
+        position: root.geometry.position
         borderThickness: root.borderThickness
     }
 

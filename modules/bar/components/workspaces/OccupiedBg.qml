@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
-import Caelestia.Components
 import Caelestia.Config
 import qs.components
 import qs.services
@@ -10,98 +9,112 @@ import qs.services
 Item {
     id: root
 
-    required property var workspaces
-    required property int wsSpacing
+    required property Repeater workspaces
+    required property var occupied
+    required property var wsIds
+    required property bool horizontal
 
     readonly property color colour: Colours.layer(Colours.palette.m3surfaceContainerHighest, 2)
-    property color colourAnimated: colour
+    property list<var> pills: []
 
-    Behavior on colourAnimated {
-        CAnim {}
-    }
+    // Builds a merged pill per contiguous run of occupied cells, mirroring v2.5.0's
+    // behaviour of grouping adjacent occupied workspaces into a single rounded rect.
+    onOccupiedChanged: rebuild()
+    onWsIdsChanged: rebuild()
+    Component.onCompleted: rebuild()
 
-    // Item wrappers because `layer.enabled` clips the content, and the rects extend 1px outside the parent
-    Item {
-        anchors.fill: parent
-        anchors.margins: -1
+    function rebuild(): void {
+        for (const p of root.pills)
+            p.destroy();
+        root.pills = [];
 
-        opacity: root.colourAnimated.a
-        layer.enabled: opacity < 1 // Forces opacity to apply to children as a single layer
-
-        Item {
-            anchors.fill: parent
-            anchors.margins: 1
-
-            AnimatedRepeater {
-                model: ScriptModel {
-                    values: root.workspaces
+        const ids = root.wsIds;
+        let run = null;
+        for (let i = 0; i < ids.length; ++i) {
+            const occupied = root.occupied[ids[i]] ?? false;
+            if (occupied) {
+                if (!run) {
+                    run = pillComp.createObject(root, {
+                        start: i,
+                        end: i
+                    });
+                    root.pills.push(run);
+                } else {
+                    run.end = i;
                 }
-
-                removeDuration: Tokens.anim.durations.expressiveDefaultEffects
-
-                OccupiedRect {}
+            } else {
+                run = null;
             }
         }
     }
 
-    component OccupiedRect: StyledRect {
-        required property int index
-        required property Workspace modelData
-
-        property real topRadius: ifAdjacent(0, -1, 0, width / 2)
-        property real bottomRadius: ifAdjacent(root.workspaces.length - 1, 1, 0, width / 2)
-        property real topPadding: ifAdjacent(0, -1, root.wsSpacing, 0)
-        property real bottomPadding: ifAdjacent(root.workspaces.length - 1, 1, root.wsSpacing, 0)
-
-        function ifAdjacent(exclIdx: int, adj: int, yes: real, no: real): real {
-            if (AnimatedRepeater.adding || AnimatedRepeater.removing || !modelData?.isOccupied || index === exclIdx)
-                return no;
-            return root.workspaces[index + adj]?.isOccupied ? yes : no;
+    Repeater {
+        model: ScriptModel {
+            values: root.pills.filter(p => p)
         }
 
-        anchors.left: parent?.left
-        anchors.right: parent?.right
-        anchors.margins: -1
+        StyledRect {
+            required property var modelData
 
-        y: modelData ? modelData.y + anchors.margins - topPadding : 0
-        implicitHeight: modelData ? modelData.LazyListView.visibleHeight - anchors.margins * 2 + topPadding + bottomPadding : 0
+            // qmllint disable incompatible-type
+            readonly property Workspace start: root.workspaces.itemAt(modelData.start) ?? null
+            readonly property Workspace end: root.workspaces.itemAt(modelData.end) ?? null
+            // qmllint enable incompatible-type
 
-        color: Qt.alpha(root.colour, 1)
-        topLeftRadius: topRadius
-        topRightRadius: topRadius
-        bottomLeftRadius: bottomRadius
-        bottomRightRadius: bottomRadius
+            anchors.horizontalCenter: root.horizontal ? undefined : root.horizontalCenter
+            anchors.verticalCenter: root.horizontal ? root.verticalCenter : undefined
 
-        opacity: modelData?.isOccupied ? 1 : 0
+            x: root.horizontal ? (start?.x ?? 0) - 1 : 0
+            y: root.horizontal ? 0 : (start?.y ?? 0) - 1
+            implicitWidth: root.horizontal ? (start && end ? end.x + end.size - start.x + 2 : 0) : Tokens.sizes.bar.innerWidth - Tokens.padding.small + 2
+            implicitHeight: root.horizontal ? Tokens.sizes.bar.innerWidth - Tokens.padding.small + 2 : (start && end ? end.y + end.size - start.y + 2 : 0)
 
-        Behavior on topRadius {
-            Anim {
-                type: Anim.DefaultEffects
+            color: root.colour
+            radius: Tokens.rounding.full
+
+            scale: 0
+            Component.onCompleted: scale = 1
+
+            Behavior on scale {
+                Anim {
+                    easing: Tokens.anim.standardDecel
+                }
+            }
+
+            Behavior on y {
+                enabled: !root.horizontal
+
+                Anim {}
+            }
+
+            Behavior on x {
+                enabled: root.horizontal
+
+                Anim {}
+            }
+
+            Behavior on implicitHeight {
+                enabled: !root.horizontal
+
+                Anim {}
+            }
+
+            Behavior on implicitWidth {
+                enabled: root.horizontal
+
+                Anim {}
             }
         }
+    }
 
-        Behavior on bottomRadius {
-            Anim {
-                type: Anim.DefaultEffects
-            }
-        }
+    Component {
+        id: pillComp
 
-        Behavior on topPadding {
-            Anim {
-                type: Anim.DefaultEffects
-            }
-        }
+        Pill {}
+    }
 
-        Behavior on bottomPadding {
-            Anim {
-                type: Anim.DefaultEffects
-            }
-        }
-
-        Behavior on opacity {
-            Anim {
-                type: Anim.DefaultEffects
-            }
-        }
+    component Pill: QtObject {
+        property int start: -1
+        property int end: -1
     }
 }

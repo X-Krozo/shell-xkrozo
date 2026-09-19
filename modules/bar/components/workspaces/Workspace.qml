@@ -11,7 +11,7 @@ import qs.components
 import qs.services
 import qs.utils
 
-Item {
+GridLayout {
     id: root
 
     required property int modelData
@@ -23,6 +23,7 @@ Item {
     required property int displayType
     required property bool showWindows
     required property var iconRules
+    required property bool horizontal
     property string activeLabel
     property string occupiedLabel
     property string label
@@ -48,6 +49,9 @@ Item {
         return Colours.layer(Colours.palette.m3outlineVariant, 2);
     }
 
+    // Unanimated prop for others to use as reference
+    readonly property int size: (horizontal ? implicitWidth : implicitHeight) + (hasWindows ? Tokens.padding.extraSmall : 0)
+
     function updateShape(): void {
         const shape = indicator.item as MaterialShape;
         if (!shape)
@@ -59,29 +63,23 @@ Item {
             shape.shape = Qt.binding(() => isOccupied ? MaterialShape.Square : MaterialShape.Circle);
     }
 
-    anchors.horizontalCenter: parent?.horizontalCenter
-    LazyListView.preferredHeight: LazyListView.removing ? 0 : layout.implicitHeight + (hasWindows ? Tokens.padding.extraSmall : 0)
-    LazyListView.visibleHeight: LazyListView.preferredHeight
+    Layout.alignment: horizontal ? Qt.AlignVCenter : Qt.AlignHCenter
+    Layout.preferredWidth: horizontal ? size : -1
+    Layout.preferredHeight: horizontal ? -1 : size
 
-    opacity: LazyListView.removing || LazyListView.adding ? 0 : 1
+    columns: horizontal ? -1 : 1
+    rowSpacing: 0
+    columnSpacing: 0
 
     onFocusedChanged: updateShape()
     Component.onCompleted: updateShape()
 
-    Behavior on LazyListView.visibleHeight {
+    Behavior on Layout.preferredHeight {
         Anim {}
     }
 
-    Behavior on y {
-        enabled: root.LazyListView.ready
-
+    Behavior on Layout.preferredWidth {
         Anim {}
-    }
-
-    Behavior on opacity {
-        Anim {
-            type: Anim.DefaultEffects
-        }
     }
 
     Component {
@@ -172,78 +170,99 @@ Item {
         }
     }
 
-    ColumnLayout {
-        id: layout
+    Loader {
+        id: indicator
 
-        anchors.fill: parent
-        spacing: 0
-
-        Loader {
-            id: indicator
-
-            Layout.alignment: Qt.AlignHCenter | Qt.AlignTop
-            Layout.preferredHeight: Tokens.sizes.bar.innerWidth - Tokens.padding.small
-            sourceComponent: {
-                if (root.displayType === BarWorkspaceDisplay.Icons)
-                    return iconLoaderComponent;
-                if (root.displayType === BarWorkspaceDisplay.Text)
-                    return textComponent;
-                return shapeComponent;
-            }
-
-            onItemChanged: root.updateShape()
+        Layout.alignment: horizontal ? Qt.AlignVCenter | Qt.AlignLeft : Qt.AlignHCenter | Qt.AlignTop
+        Layout.preferredWidth: horizontal ? Tokens.sizes.bar.innerWidth - Tokens.padding.small : -1
+        Layout.preferredHeight: horizontal ? -1 : Tokens.sizes.bar.innerWidth - Tokens.padding.small
+        sourceComponent: {
+            if (root.displayType === BarWorkspaceDisplay.Icons)
+                return iconLoaderComponent;
+            if (root.displayType === BarWorkspaceDisplay.Text)
+                return textComponent;
+            return shapeComponent;
         }
 
-        Loader {
-            id: windows
+        onItemChanged: root.updateShape()
+    }
 
-            asynchronous: true
+    Loader {
+        id: windows
 
-            Layout.fillWidth: true
-            Layout.topMargin: -Tokens.spacing.extraSmall / 2
-            Layout.preferredHeight: root.hasWindows && item ? (item as LazyListView).layoutHeight : 0
+        asynchronous: true
 
-            visible: active
-            active: root.showWindows && Config.bar.workspaces.maxWindowIcons > 0
+        Layout.alignment: horizontal ? Qt.AlignVCenter : Qt.AlignHCenter
+        Layout.fillWidth: horizontal
+        Layout.fillHeight: !horizontal
+        Layout.leftMargin: horizontal ? -Tokens.sizes.bar.innerWidth / 10 : 0
+        Layout.topMargin: horizontal ? 0 : -Tokens.sizes.bar.innerWidth / 10
 
-            sourceComponent: LazyListView {
-                spacing: 0
-                implicitHeight: contentHeight
-                cullDelegates: false
-                removeDuration: Tokens.anim.durations.expressiveDefaultEffects
+        visible: active
+        active: root.showWindows && Config.bar.workspaces.maxWindowIcons > 0
+
+        sourceComponent: Grid {
+            columns: root.horizontal ? Math.max(1, items.count) : 1
+            spacing: 0
+
+            add: Transition {
+                Anim {
+                    properties: "scale"
+                    from: 0
+                    to: 1
+                    easing: Tokens.anim.standardDecel
+                }
+            }
+
+            move: Transition {
+                Anim {
+                    properties: "scale"
+                    to: 1
+                    easing: Tokens.anim.standardDecel
+                }
+                Anim {
+                    properties: "x,y"
+                }
+            }
+
+            Repeater {
+                id: items
 
                 model: ScriptModel {
                     values: {
                         const windows = root.toplevels;
-                        const maxIcons = root.Config.bar.workspaces.maxWindowIcons;
+                        const maxIcons = Config.bar.workspaces.maxWindowIcons;
                         return maxIcons > 0 ? windows.slice(0, maxIcons) : windows;
                     }
                 }
 
-                delegate: MaterialIcon {
-                    id: win
-
+                MaterialIcon {
                     required property var modelData
-                    required property int index // Needed, LazyListView will fail to set it if it doesn't exist
 
                     grade: 0
                     horizontalAlignment: Text.AlignHCenter
                     text: Icons.getAppCategoryIcon(modelData.lastIpcObject.class, "terminal")
                     color: root.onOtherMonitor ? root.offMonitorColour : Colours.palette.m3onSurfaceVariant
 
-                    opacity: LazyListView.adding || LazyListView.removing ? 0 : 1
-
-                    Behavior on opacity {
+                    Behavior on scale {
                         Anim {
                             type: Anim.DefaultEffects
                         }
                     }
 
-                    Behavior on y {
+                    Behavior on x {
                         Anim {}
                     }
                 }
             }
+        }
+
+        Behavior on Layout.preferredWidth {
+            Anim {}
+        }
+
+        Behavior on Layout.preferredHeight {
+            Anim {}
         }
     }
 

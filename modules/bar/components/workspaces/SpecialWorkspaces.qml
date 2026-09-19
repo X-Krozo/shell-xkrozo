@@ -1,231 +1,82 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Layouts
 import Quickshell
 import Quickshell.Hyprland
-import Caelestia
-import Caelestia.Components
 import Caelestia.Config
 import qs.components
-import qs.components.effects
 import qs.services
 
 Item {
     id: root
 
     required property HyprlandMonitor monitor
+    required property bool horizontal
 
     readonly property int activeSpecialId: monitor?.lastIpcObject.specialWorkspace?.id ?? 0
     readonly property var wsIds: {
         const allMonitors = !Config.bar.workspaces.perMonitor;
         return Hypr.workspaces.values.filter(w => w.name.startsWith("special:") && (allMonitors || w.monitor === root.monitor)).map(w => w.id);
     }
-    readonly property int activeIdx: wsIds.indexOf(activeSpecialId)
-    readonly property real maxViewY: Math.max(0, view.contentHeight - height)
 
-    readonly property Workspace activeWs: {
-        view.itemsDirty;
-        return view.itemAtIndex(activeIdx) as Workspace;
-    }
+    GridLayout {
+        id: layout
 
-    function ensureVisible(animate = true): void {
-        if (!activeWs)
-            return;
+        anchors.centerIn: parent
+        columns: root.horizontal ? -1 : 1
+        rowSpacing: Math.floor(Tokens.spacing.small)
+        columnSpacing: Math.floor(Tokens.spacing.small)
 
-        const top = activeWs.LazyListView.layoutY;
-        const bottom = top + activeWs.LazyListView.preferredHeight;
+        Repeater {
+            id: workspaces
 
-        let target = view.y;
-        if (top < -target)
-            target = -top;
-        else if (bottom > -target + height)
-            target = -(bottom - height);
-
-        target = CUtils.clamp(target, -maxViewY, 0);
-        if (target !== view.y) {
-            if (animate) {
-                const type = viewYAnim.type;
-                viewYAnim.type = Anim.DefaultSpatial;
-                view.y = target;
-                viewYAnim.type = type;
-            } else {
-                viewYBehavior.enabled = false;
-                view.y = target;
-                viewYBehavior.enabled = true;
+            model: ScriptModel {
+                values: root.wsIds
             }
-        }
-    }
 
-    onActiveWsChanged: ensureVisible()
-    onHeightChanged: ensureVisible(false)
-    Component.onCompleted: ensureVisible(false)
-    onMaxViewYChanged: ensureVisible()
-
-    layer.enabled: true
-    layer.effect: Mask {
-        maskSource: mask
-    }
-
-    Connections {
-        function onLayoutYChanged(): void {
-            root.ensureVisible();
-        }
-
-        function onPreferredHeightChanged(): void {
-            root.ensureVisible();
-        }
-
-        target: root.activeWs?.LazyListView ?? null
-    }
-
-    Item {
-        id: mask
-
-        anchors.fill: parent
-        layer.enabled: true
-        visible: false
-
-        Rectangle {
-            anchors.fill: parent
-            radius: Tokens.rounding.full
-
-            gradient: Gradient {
-                orientation: Gradient.Vertical
-
-                GradientStop {
-                    position: 0
-                    color: Qt.rgba(0, 0, 0, 0)
-                }
-                GradientStop {
-                    position: 0.2
-                    color: Qt.rgba(0, 0, 0, 1)
-                }
-                GradientStop {
-                    position: 0.8
-                    color: Qt.rgba(0, 0, 0, 1)
-                }
-                GradientStop {
-                    position: 1
-                    color: Qt.rgba(0, 0, 0, 0)
-                }
-            }
-        }
-
-        Rectangle {
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-
-            radius: Tokens.rounding.full
-            implicitHeight: parent.height / 2
-            opacity: view.y < -Tokens.padding.extraSmall ? 0 : 1
-
-            Behavior on opacity {
-                Anim {
-                    type: Anim.DefaultEffects
-                }
-            }
-        }
-
-        Rectangle {
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-
-            radius: Tokens.rounding.full
-            implicitHeight: parent.height / 2
-            opacity: view.y > -root.maxViewY + Tokens.padding.extraSmall ? 0 : 1
-
-            Behavior on opacity {
-                Anim {
-                    type: Anim.DefaultEffects
-                }
-            }
-        }
-    }
-
-    LazyListView {
-        id: view
-
-        anchors.left: parent.left
-        anchors.right: parent.right
-        implicitHeight: contentHeight
-
-        cullDelegates: false
-        spacing: Tokens.spacing.small
-        removeDuration: Tokens.anim.durations.expressiveDefaultEffects
-
-        onContentHeightChanged: root.ensureVisible()
-
-        model: ScriptModel {
-            values: root.wsIds
-        }
-
-        delegate: Workspace {
-            activeWsId: root.activeSpecialId
-            ws: modelData
-            monitor: root.monitor
-            offMonitorColour: Colours.palette.m3outline
-            displayType: Config.bar.workspaces.specialDisplayType
-            showWindows: Config.bar.workspaces.showWindowsOnSpecialWorkspaces
-            iconRules: GlobalConfig.bar.workspaces.specialWorkspaceIcons
-        }
-
-        Behavior on y {
-            id: viewYBehavior
-
-            Anim {
-                id: viewYAnim
-
-                type: Anim.FastEffects
+            delegate: Workspace {
+                activeWsId: root.activeSpecialId
+                ws: modelData
+                monitor: root.monitor
+                horizontal: root.horizontal
+                offMonitorColour: Colours.palette.m3outline
+                displayType: Config.bar.workspaces.specialDisplayType
+                showWindows: Config.bar.workspaces.showWindowsOnSpecialWorkspaces
+                iconRules: GlobalConfig.bar.workspaces.specialWorkspaceIcons
             }
         }
     }
 
     Loader {
         asynchronous: true
-        anchors.left: view.left
-        anchors.right: view.right
+        anchors.horizontalCenter: root.horizontal ? undefined : parent.horizontalCenter
+        anchors.verticalCenter: root.horizontal ? parent.verticalCenter : undefined
         active: Config.bar.workspaces.activeIndicator
 
         sourceComponent: ActiveIndicator {
-            activeWs: root.activeWs
-            mask: view
-            color: Colours.palette.m3tertiary
+            activeWsId: root.activeSpecialId
+            workspaces: workspaces
+            mask: layout
+            horizontal: root.horizontal
+
+            indicatorColour: Colours.palette.m3tertiary
             contentColour: Colours.palette.m3onTertiary
         }
     }
 
     MouseArea {
-        property real startY
-        property real startViewY
-        property bool dragging
+        id: mouseArea
 
-        anchors.fill: parent
-
-        onPressed: event => {
-            startY = event.y;
-            startViewY = view.y;
-            dragging = false;
-        }
-
-        onPositionChanged: event => {
-            if (!dragging && Math.abs(event.y - startY) > drag.threshold)
-                dragging = true;
-
-            if (dragging)
-                view.y = CUtils.clamp(startViewY + (event.y - startY), -root.maxViewY, 0);
-        }
-
+        anchors.fill: layout
         onClicked: event => {
-            if (dragging)
-                return;
-
-            const ws = view.itemAt(event.x, event.y - view.y) as Workspace;
+            const ws = (layout.childAt(event.x, event.y) as Workspace)?.ws; // qmllint disable incompatible-type
             if (ws) {
-                const match = Hypr.workspaces.values.find(w => w.id === ws.ws);
+                const match = Hypr.workspaces.values.find(w => w.id === ws);
                 if (match)
                     Hypr.toggleSpecial(Hypr.trimWsName(match.name));
+                else
+                    Hypr.toggleSpecial("special");
             } else {
                 Hypr.toggleSpecial("special");
             }
