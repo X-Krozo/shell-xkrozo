@@ -68,7 +68,7 @@ StyledWindow {
     name: "drawers"
     WlrLayershell.exclusionMode: ExclusionMode.Ignore
     WlrLayershell.layer: (fsTransitionProg > 0 && contentItem.Config.general.showOverFullscreen) || (hasSpecialWorkspace && hasFullscreenOnNormalWs) ? WlrLayer.Overlay : WlrLayer.Top
-    WlrLayershell.keyboardFocus: screenState.launcher || screenState.session ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: screenState.launcher || screenState.session || screenState.mediaFullscreen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
     mask: hasFullscreen ? emptyRegion : regions
 
@@ -258,6 +258,14 @@ StyledWindow {
         bar: bar
         borderThickness: root.borderLayoutThickness
         fullscreen: root.hasFullscreen
+
+        FullscreenMedia {
+            id: mediaFullscreen
+
+            screenState: root.screenState
+            bar: bar
+            borderThickness: root.borderThickness
+        }
 
         Panels {
             id: panels

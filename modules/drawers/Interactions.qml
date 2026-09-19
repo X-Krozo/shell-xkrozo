@@ -19,6 +19,7 @@ CustomMouseArea {
     required property bool fullscreen
 
     property point dragStart
+    property bool dragMoved
     property bool dashboardShortcutActive
     property bool osdShortcutActive
     property bool utilitiesShortcutActive
@@ -64,6 +65,24 @@ CustomMouseArea {
     hoverEnabled: true
 
     onPressed: event => dragStart = Qt.point(event.x, event.y)
+    onClicked: event => {
+        if (event.x < bar.implicitWidth) {
+            bar.checkPopout(event.y);
+        } else if (!dragMoved) {
+            screenState.osd = false;
+            screenState.utilities = false;
+            screenState.appVolumes = false;
+
+            if (screenState.mediaFullscreen) {
+                screenState.sidebar = false;
+                screenState.dashboard = false;
+                screenState.session = false;
+                screenState.launcher = false;
+                root.popouts.close();
+            }
+        }
+        dragMoved = false;
+    }
     onContainsMouseChanged: {
         if (!containsMouse) {
             // Only hide if not activated by shortcut
@@ -99,6 +118,9 @@ CustomMouseArea {
         const y = event.y;
         const dragX = x - dragStart.x;
         const dragY = y - dragStart.y;
+
+        if (pressed && (Math.abs(dragX) > Config.border.minThickness || Math.abs(dragY) > Config.border.minThickness))
+            dragMoved = true;
 
         if (fullscreen) {
             root.panels.osd.hovered = inRightPanel(panels.osdWrapper, x, y);

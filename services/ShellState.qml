@@ -9,6 +9,13 @@ import qs.services
 Singleton {
     property ShellRoot shellRoot
 
+    // Global launcher-interrupt counter (order-independent). The launcher toggle
+    // only fires when no interrupt has been raised during the current Super press.
+    property int launcherInterrupts: 0
+
+    // Set by Lock.qml before workspace swap to suppress bar ws indicator updates
+    property bool screenLocked: false
+
     function anySidebarOpen(): bool {
         return states.instances.some(s => s.sidebar);
     }

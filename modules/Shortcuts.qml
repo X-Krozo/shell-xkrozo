@@ -85,6 +85,20 @@ Scope {
     // qmllint disable unresolved-type
     CustomShortcut {
         // qmllint enable unresolved-type
+        name: "mediaFullscreen"
+        description: "Toggle media fullscreen"
+        onPressed: {
+            if (root.hasFullscreen)
+                return;
+            const screenState = ShellState.forActive();
+            if (screenState)
+                screenState.mediaFullscreen = !screenState.mediaFullscreen;
+        }
+    }
+
+    // qmllint disable unresolved-type
+    CustomShortcut {
+        // qmllint enable unresolved-type
         name: "sidebar"
         description: "Toggle sidebar"
         onPressed: {

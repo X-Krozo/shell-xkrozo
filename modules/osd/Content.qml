@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Layouts
+import Quickshell
 import Caelestia
 import Caelestia.Config
 import qs.components
@@ -44,11 +45,15 @@ Item {
             implicitHeight: Tokens.sizes.osd.sliderHeight
 
             FilledSlider {
+                id: volumeSlider
+
+                objectName: "volume"
                 anchors.fill: parent
 
                 icon: Icons.getVolumeIcon(value, root.muted)
                 value: root.volume
-                to: GlobalConfig.services.maxVolume
+                externalValue: root.volume
+                boostEnabled: true
                 onMoved: Audio.setVolume(value)
             }
         }
@@ -69,11 +74,14 @@ Item {
                 implicitHeight: Tokens.sizes.osd.sliderHeight
 
                 FilledSlider {
+                    id: micSlider
+
+                    objectName: "mic"
                     anchors.fill: parent
 
                     icon: Icons.getMicVolumeIcon(value, root.sourceMuted)
-                    value: root.sourceVolume
-                    to: GlobalConfig.services.maxVolume
+                value: root.sourceVolume
+                boostEnabled: true
                     onMoved: Audio.setSourceVolume(value)
                 }
             }
@@ -98,6 +106,9 @@ Item {
                 implicitHeight: Tokens.sizes.osd.sliderHeight
 
                 FilledSlider {
+                    id: brightnessSlider
+
+                    objectName: "brightness"
                     anchors.fill: parent
 
                     icon: `brightness_${(Math.round(value * 6) + 1)}`

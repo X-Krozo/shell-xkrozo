@@ -6,40 +6,42 @@ import Quickshell
 import Quickshell.Widgets
 import Caelestia
 import Caelestia.Config
-import Caelestia.I18n
 import qs.components
 import qs.components.filedialog
 
-Item {
+FocusScope {
     id: root
 
     required property ScreenState screenState
     required property FileDialog facePicker
+
+    Keys.onEscapePressed: root.screenState.dashboard = false
+    Component.onCompleted: forceActiveFocus()
 
     readonly property var dashboardTabs: {
         const allTabs = [
             {
                 component: dashComponent,
                 iconName: "dashboard",
-                text: Tr.tr("Dashboard"),
+                text: qsTr("Dashboard"),
                 enabled: Config.dashboard.showDashboard
             },
             {
                 component: mediaComponent,
                 iconName: "queue_music",
-                text: Tr.tr("Media"),
+                text: qsTr("Media"),
                 enabled: Config.dashboard.showMedia
             },
             {
                 component: performanceComponent,
                 iconName: "speed",
-                text: Tr.tr("Performance"),
+                text: qsTr("Performance"),
                 enabled: Config.dashboard.showPerformance
             },
             {
                 component: weatherComponent,
                 iconName: "cloud",
-                text: Tr.tr("Weather"),
+                text: qsTr("Weather"),
                 enabled: Config.dashboard.showWeather
             }
         ];

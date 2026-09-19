@@ -23,6 +23,8 @@ Item {
 
     readonly property alias osd: osd
     readonly property alias osdWrapper: osdWrapper
+    readonly property alias volumeDock: volumeDock
+    readonly property alias volumeDockWrapper: volumeDockWrapper
     readonly property alias notifications: notifications
     readonly property alias session: session
     readonly property alias sessionWrapper: sessionWrapper
@@ -37,6 +39,29 @@ Item {
     anchors.fill: parent
     anchors.margins: borderThickness
     anchors.leftMargin: bar.implicitWidth
+
+    Item {
+        id: volumeDockWrapper
+
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: -volumeDock.tooltipExtent / 2
+        anchors.right: parent.right
+        anchors.rightMargin: osdWrapper.anchors.rightMargin + osdWrapper.implicitWidth
+        clip: volumeDock.offsetScale < 1
+
+        implicitWidth: volumeDock.implicitWidth * (1 - volumeDock.offsetScale)
+        implicitHeight: volumeDock.implicitHeight
+
+        Sidebar.VolumeDock {
+            id: volumeDock
+
+            screenState: root.screenState
+            osdOffset: osdWrapper.anchors.rightMargin + osdWrapper.implicitWidth
+
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: parent.right
+        }
+    }
 
     Item {
         id: osdWrapper
